@@ -1,35 +1,30 @@
-import os
+import os, csv, time
 import nibabel as nib
 import numpy as np
+import networkx as nx
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from nibabel.viewers import OrthoSlicer3D
 from nilearn import plotting, maskers, connectome, image, datasets
 from sklearn.cluster import KMeans
 
+path_join = lambda root, leaf: os.path.join(root, leaf)
+# 将root路径下含有字段string的所有文件的路径生成一个列表
+select_path_list = lambda root, string: [path_join(root, label) for label in os.listdir(root) if string in label]
+# 
+check_path_or_create = lambda path: os.makedirs(path) if not os.path.exists(path) else None
+
 """ 文件路径 """
-# 原始数据 REST-meta-MDD-Phase1-Sharing
-REST_meta_MDD = os.path.join('..', 'REST-meta-MDD')
-Phase1_Sharing = os.path.join(REST_meta_MDD, 'REST-meta-MDD-Phase1-Sharing')
-Results = os.path.join(Phase1_Sharing, 'Results')
-ReHo_labels = ['ReHo_FunImgARCWF', 'ReHo_FunImgARglobalCWF']
-ReHo_paths = [ReHo_FunImgARCWF, ReHo_FunImgARglobalCWF] = [os.path.join(Results, label) for label in ReHo_labels]
-ReHo_dict = {label: path for label, path in zip(ReHo_labels, ReHo_paths)} # {key=label : value=path}
-# 原始数据 REST-meta-MDD-VBM-Phase1-Sharing
-VBM_Phase1_Sharing = os.path.join(REST_meta_MDD, 'REST-meta-MDD-VBM-Phase1-Sharing')
-VBM = os.path.join(VBM_Phase1_Sharing, 'VBM')
-model_labels = ['c1', 'c2', 'c3', 'mwc1', 'mwc2', 'mwc3', 'wc1', 'wc2', 'wc3']
-model_paths = [c1, c2, c3, mwc1, mwc2, mwc3, wc1, wc2, wc3] = [os.path.join(VBM, label) for label in model_labels]
-model_dict = {label: path for label, path in zip(model_labels, model_paths)} # {key=label : value=path}
-# 伪时序图像
-concatenated_images_path = os.path.join('..', 'concatenated_images')
+DEPRESSION_PATH = path_join('..', 'depression_ds002748')
+SUBJECTS_PATH = select_path_list(DEPRESSION_PATH, 'sub')
+SUBJECTS_FUNC_PATH = [select_path_list(x, 'func') for x in SUBJECTS_PATH]
+PARICIPANTS_INFO = path_join(DEPRESSION_PATH, 'participants.tsv')
+CONNECTION_MATRIX = path_join('..', 'connection_matrix')
+check_path_or_create(CONNECTION_MATRIX)
 
 """ 绘制相关矩阵 """
 def draw_correlation_matrix(correlation_matrix, labels=None)->None:
     plt.figure(figsize=(10, 10))
-    # Mask the main diagonal for visualization:
-    # np.fill_diagonal(correlation_matrix, 0)
-
     plt.imshow(correlation_matrix, interpolation="nearest", cmap="RdBu_r", vmax=0.8, vmin=-0.8)
 
     if not labels == None:
@@ -40,47 +35,51 @@ def draw_correlation_matrix(correlation_matrix, labels=None)->None:
     plt.subplots_adjust(left=.01, bottom=.3, top=.99, right=.62)
     plt.show()
 
-""" 将该路径下的各个患者合并成一个文件 将该路径下的各个正常合并成一个文件 """
-def gather_subjects_to_time_series(model_path, save_path):
-    for site_name in ['S' + str(i) for i in range(1, 26)]:
-        for flag in ['-1-', '-2-']: # 1-MDD 2-NCs
-            concatenated_path = os.path.join(save_path, site_name+flag+'concatenated.nii.gz')
-            if os.path.exists(concatenated_path):
-                return 
-            
-            files = [os.path.join(model_path, file) for file in os.listdir(model_path) if site_name+flag in file]
-            first_img = nib.load(files[0])
-            first_data = first_img.get_fdata()
-            shape = first_data.shape
-            # 创建一个空的拼接后的图像数据数组
-            concatenated_data = np.zeros((shape[0], shape[1], shape[2], len(files)))
-            # 遍历每个nii文件
-            for i, nii_file in enumerate(files):
-                # 加载nii文件
-                img = nib.load(nii_file)
-                # 提取数据数组
-                data = img.get_fdata()
-                # 将数据数组添加到拼接后的图像数据数组中
-                concatenated_data[:, :, :, i] = data
-
-            # 创建一个新的nii图像对象，使用第一个nii文件的头信息
-            concatenated_img = nib.Nifti1Image(concatenated_data, affine=first_img.affine, header=first_img.header)
-            nib.save(concatenated_img, concatenated_path)
-            print(f'{concatenated_path} is saved!')
-            
+""" 对脑图谱的可视化 """
+def draw_atlas(atlas : nib.nifti1.Nifti1Image):
+    # 展示三个剖面
+    OrthoSlicer3D(atlas.dataobj).show()
+    # 绘制玻璃脑图像
+    plotting.plot_glass_brain(atlas, colorbar=True, plot_abs=False)
+    plotting.show()
+    # 绘制结构连接矩阵
+    with open(BNA_MATRIX_PATH, 'r') as file:
+        reader = csv.reader(file)
+        matrix = np.array([row for row in reader])
+        matrix = np.where(matrix == '0', 0, 1)
+        draw_correlation_matrix(matrix)   
+        # 获取节点坐标
+        coordinates = plotting.find_parcellation_cut_coords(labels_img=atlas)  
+        # 绘制脑图谱连接网络
+        plotting.plot_connectome(matrix, coordinates, node_size=10)
+        # 显示图谱
+        plotting.show()
 
 """ Atlas """
-### Brainnetome Atlas - Brainnetome Center and National Laboratory of Pattern Recognition(NLPR)
+# Brainnetome Atlas - Brainnetome Center and National Laboratory of Pattern Recognition(NLPR)
 atlas = nib.load('BN_Atlas_246_1mm.nii.gz') # dim[1~3] = [182 218 182]
-### Harvard_Oxford Atlas
-# dataset = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm')
-# atlas = dataset.maps # dim[1~3] = [91 109  91]
-# 映射到MNI空间
-# load_mni152_template
-# load_mni152_gm_template: grey-matter template.
-# load_mni152_wm_template: white-matter template.
-# atlas = image.resample_to_img(atlas, datasets.load_mni152_gm_template()) # dim[1~3] = [197 233 189]
-# labels = dataset.labels
+# 连接矩阵
+BNA_MATRIX_PATH = path_join('.', 'BNA_matrix_binary_246x246.csv')
+# atlas = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm').maps
+# 对图谱的可视化
+# draw_atlas(atlas)
+
+# 定义一个标签掩码器
+masker = maskers.NiftiLabelsMasker(labels_img=atlas, standardize='zscore_sample')
+
+""" 读取PARICIPANTS_INFO的内容 """
+participants_side_info = {} # key(sub-id) : value(information_dictionary);
+with open(PARICIPANTS_INFO, 'r') as file:
+    reader = csv.reader(file, delimiter='\t')
+    side_info = [row for row in reader]
+    # head解析'participant_id', 'age', 'gender', 'group', 'IQ_Raven', 'ICD-10', 'MADRS', 'Zung_SDS', 'BDI', 'HADS-anx', 'HADS-depr', 'MC-SDS', 'TAS-26', 'ECR-avoid', 'ECR-anx', 'RRS-sum', 'RRS-reflection', 'RRS-brooding', 'RRS-depr', 'Edinburgh'
+    # 其中group下有 depr和control. depr为抑郁症患者, control为健康人群
+    head = side_info[0][1:]
+    side_info = side_info[1:]
+    for each_participants_side_info in side_info:
+        assert len(head) == len(each_participants_side_info[1:])
+        information_dictionary = {field:value for field, value in zip(head, each_participants_side_info[1:])} # key(field in head) : value(the specific value)
+        participants_side_info[each_participants_side_info[0]] = information_dictionary
 
 """ nibabel库读取nii.gz文件
 nibabel.load返回一个Nifti1Image类型变量
@@ -90,102 +89,41 @@ nibabel.load返回一个Nifti1Image类型变量
     - dim[1] 到 dim[3] 分别表示数据在三个空间维度(X、Y、Z)上的大小.例如,如果数据是一个 100x100x100 的 3D 图像,dim[1]、dim[2] 和 dim[3] 就分别是 100.
     - 如果数据有时间维度,dim[4] 就表示时间点的数量.例如,如果数据是一个 4D 时间序列图像,每个时间点是一个 100x100x100 的 3D 图像,且有 10 个时间点,dim[4] 就是 10.
     - dim[5] 到 dim[7] 用于更高维度的数据,但在大多数情况下,这些维度的大小都是 1.
-    - MNI空间的数据 dim[1~3] = [121 145 121]
-
-本rest-fMRI数据集中每个像素点存放一个(0,1)之间的灰度值, 周围有很多空值, 有部分值大于1.
-本rest-fMRI数据集中  不存在时间序列,即dim[4]=1
 
 静息态(rs)fMRI的重要特征: 功能连接-描述不同脑区的协同性、ReHo(局部一致性)-描述相邻体素区域的活动步调的一致性、低频波动振幅(ALFF)-描述单个体素区域的活动强度
     ReHo(Regional Homogeneity):在于描述给定体素的时间序列(BOLD信号)与其最近邻体素的时间序列(BOLD)的相似性,ReHo认为,当大脑功能区域涉及特定条件时,该区域内的体素在时间上更均匀,是一个经过验证的较为可靠rs-fMRI特征.
     ALFF(Amplitude of Low Frequency Fluctuation):揭示了区域自发活动的 BOLD 信号强度.
-
-使用该数据集计算功能连接出现负相关: http://rfmri.org/node/469
 """
 
-# ReHo_FunImgARglobalCWF_files = os.listdir(ReHo_FunImgARglobalCWF)
-# for file , _ in zip(ReHo_FunImgARglobalCWF_files, tqdm(range(len(ReHo_FunImgARglobalCWF_files)))):
-#     img = nib.load(os.path.join(ReHo_FunImgARglobalCWF, file))
-#     print(img.header['dim'])
-# exit(0)
+for sub_func_path in SUBJECTS_FUNC_PATH:
+    start_time = time.time()
 
-""" 构建伪rs-fMRI时间序列 """
-# 所有受试者采集自25个站点(Site, S1~S25). 每个站点都有1-患者、2-正常人(Not Clinically Significant, NCs)
-# 每个站点的所有患者合并一个、每个站点的正常人合并一个
-# 使用wc1/wc2/wc3: MNI空间的灰质/白质/脑脊液的密度(density)
-# 使用mwc1/mwc2/mwc3: MNI空间的灰质/白质/脑脊液的体素(volume)
-for model_label, model_path in model_dict.items():
-    if 'w' in model_label:
-        save_path = os.path.join(concatenated_images_path, model_label)
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        gather_subjects_to_time_series(model_path, save_path)
+    files = select_path_list(sub_func_path[0], '.nii')
+    full_name = files[0].split(os.sep)[-1].split('.')[0]
+    sub_name = full_name.split('_')[0]
+    state = participants_side_info[sub_name]['group']
+    state = '0' if state == 'control' else '1' if state == 'depr' else exit(1) # 0-健康人群 1代表患者
+    save_matrix_path = path_join(CONNECTION_MATRIX, full_name+'_'+state+'.npy')
+    if os.path.exists(save_matrix_path):
+        continue
 
-""" """
-labels = os.listdir(concatenated_images_path)
-for label in os.listdir(concatenated_images_path):
-    print(label)
-exit(0)
-
-
-# 定义一个标签掩码器
-masker = maskers.NiftiLabelsMasker(labels_img=atlas, standardize='zscore_sample')#True) 
-
-# 提取时间序列
-time_series = masker.fit_transform(concatenated_img) 
-
-# 计算连接矩阵
-correlation_matrix = connectome.ConnectivityMeasure(kind='correlation', standardize='zscore_sample').fit_transform([time_series])[0] 
-for x in correlation_matrix:
-    print(x)
-exit(0)
-# 绘制热力图
-draw_correlation_matrix(correlation_matrix)
-# exit(0)
-
-# 获取节点坐标
-coordinates = plotting.find_parcellation_cut_coords(labels_img=atlas) 
-
-# 绘制连接图
-plotting.plot_connectome(correlation_matrix, coordinates)   
-
-# 显示图像
-plotting.show()
-exit(0)
-for file, _ in zip(wc1_files, tqdm(range(len(wc1_files)))):
-    # 把S1-1-0001.nii.gz到S1-1-0074.nii.gz拼起来，装作一个时间序列
-    
-    
-    
-    
-    img = nib.load(os.path.join(wc1, file))
-    print(img.header['dim'])
-    continue
-    # 展示三个剖面
-    # OrthoSlicer3D(new_img.dataobj).show()
-    # 绘制玻璃脑图像
-    # plotting.plot_glass_brain(img, colorbar=True, plot_abs=False)
-    # plotting.show()
-
-    # 定义一个标签掩码器
-    masker = maskers.NiftiLabelsMasker(labels_img=atlas, standardize=True) 
-
+    img = nib.load(files[0])
+    img = image.resample_img(img, target_affine=atlas.affine, target_shape=atlas.shape[:3])
     # 提取时间序列
-    time_series = masker.fit_transform(img) 
+    time_series = masker.fit_transform(img)
+    # 计算连接矩阵 BN Atlas=246×246 其值分布在 (-1.0, 1.0] 之间
+    correlation_matrix = connectome.ConnectivityMeasure(kind='correlation', standardize='zscore_sample').fit_transform([time_series])[0] 
+    np.save(save_matrix_path, correlation_matrix)
 
-    # 计算连接矩阵
-    correlation_matrix = connectome.ConnectivityMeasure(kind='correlation').fit_transform([time_series])[0] 
-    print(correlation_matrix)
-    assert np.count_nonzero(correlation_matrix == 1) == 246
-    # exit(0)
-    # 获取节点坐标
-    coordinates = plotting.find_parcellation_cut_coords(labels_img=atlas) 
-
-    # 绘制连接图
-    plotting.plot_connectome(correlation_matrix, coordinates)   
-
-    # 显示图像
-    plotting.show()
-    # # numpy类型的数组
-    # data = img.get_fdata() 
-    # # 将NaN值替换为0
-    # data = np.nan_to_num(data)
+    end_time = time.time()
+    print(f'It took {round((end_time - start_time)/60, 4)} minutes to process {sub_name}.')
+    
+    ### 对连接矩阵的可视化分析 ###
+    # draw_correlation_matrix(correlation_matrix)   
+    # # 获取节点坐标
+    # coordinates = plotting.find_parcellation_cut_coords(labels_img=atlas)  
+    # # 绘制脑图谱连接网络
+    # plotting.plot_connectome(correlation_matrix, coordinates, edge_threshold='80%', node_size=10)
+    # # 显示图谱
+    # plotting.show()
+    
