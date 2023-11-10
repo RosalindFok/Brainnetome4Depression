@@ -1,2 +1,2 @@
-# Brainnetome4MDD
-MDD: Major Depressive Disorder
+# Brainnetome4Depression
+

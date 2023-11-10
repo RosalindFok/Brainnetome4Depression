@@ -1,29 +1,14 @@
-import os, csv, time
+""" 功能连接网络 """
+import os, csv, time, json
 import nibabel as nib
 import numpy as np
-import networkx as nx
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 from nibabel.viewers import OrthoSlicer3D
 from nilearn import plotting, maskers, connectome, image, datasets
-from sklearn.cluster import KMeans
-
-path_join = lambda root, leaf: os.path.join(root, leaf)
-# 将root路径下含有字段string的所有文件的路径生成一个列表
-select_path_list = lambda root, string: [path_join(root, label) for label in os.listdir(root) if string in label]
-# 
-check_path_or_create = lambda path: os.makedirs(path) if not os.path.exists(path) else None
-
-""" 文件路径 """
-DEPRESSION_PATH = path_join('..', 'depression_ds002748')
-SUBJECTS_PATH = select_path_list(DEPRESSION_PATH, 'sub')
-SUBJECTS_FUNC_PATH = [select_path_list(x, 'func') for x in SUBJECTS_PATH]
-PARICIPANTS_INFO = path_join(DEPRESSION_PATH, 'participants.tsv')
-CONNECTION_MATRIX = path_join('..', 'connection_matrix')
-check_path_or_create(CONNECTION_MATRIX)
+from load_path import *
 
 """ 绘制相关矩阵 """
-def draw_correlation_matrix(correlation_matrix, labels=None)->None:
+def draw_correlation_matrix(correlation_matrix : np.array, labels=None)->None:
     plt.figure(figsize=(10, 10))
     plt.imshow(correlation_matrix, interpolation="nearest", cmap="RdBu_r", vmax=0.8, vmin=-0.8)
 
@@ -34,6 +19,12 @@ def draw_correlation_matrix(correlation_matrix, labels=None)->None:
         plt.gca().yaxis.tick_right()
     plt.subplots_adjust(left=.01, bottom=.3, top=.99, right=.62)
     plt.show()
+
+""" 保存相关矩阵 """
+def save_connection_matrix(correlation_matrix : np.array, save_path : str):
+    plt.figure(figsize=(10, 10))
+    plt.imshow(correlation_matrix, interpolation="nearest", cmap="RdBu_r", vmax=0.8, vmin=-0.8)
+    plt.savefig(save_path)
 
 """ 对脑图谱的可视化 """
 def draw_atlas(atlas : nib.nifti1.Nifti1Image):
@@ -57,9 +48,7 @@ def draw_atlas(atlas : nib.nifti1.Nifti1Image):
 
 """ Atlas """
 # Brainnetome Atlas - Brainnetome Center and National Laboratory of Pattern Recognition(NLPR)
-atlas = nib.load('BN_Atlas_246_1mm.nii.gz') # dim[1~3] = [182 218 182]
-# 连接矩阵
-BNA_MATRIX_PATH = path_join('.', 'BNA_matrix_binary_246x246.csv')
+atlas = nib.load(path_join(BN_Atlas_path, 'BN_Atlas_246_1mm.nii.gz')) # dim[1~3] = [182 218 182]
 # atlas = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm').maps
 # 对图谱的可视化
 # draw_atlas(atlas)
@@ -80,6 +69,8 @@ with open(PARICIPANTS_INFO, 'r') as file:
         assert len(head) == len(each_participants_side_info[1:])
         information_dictionary = {field:value for field, value in zip(head, each_participants_side_info[1:])} # key(field in head) : value(the specific value)
         participants_side_info[each_participants_side_info[0]] = information_dictionary
+with open(PARICIPANTS_INFO_JSON, 'w') as file:
+    json.dump(participants_side_info, file, indent=4)
 
 """ nibabel库读取nii.gz文件
 nibabel.load返回一个Nifti1Image类型变量
@@ -104,26 +95,33 @@ for sub_func_path in SUBJECTS_FUNC_PATH:
     state = participants_side_info[sub_name]['group']
     state = '0' if state == 'control' else '1' if state == 'depr' else exit(1) # 0-健康人群 1代表患者
     save_matrix_path = path_join(CONNECTION_MATRIX, full_name+'_'+state+'.npy')
-    if os.path.exists(save_matrix_path):
+    save_pic_path = path_join(CONNECTION_MATRIX, full_name+'_'+state+'.svg') 
+    if os.path.exists(save_matrix_path) and os.path.exists(save_pic_path):
         continue
-
-    img = nib.load(files[0])
-    img = image.resample_img(img, target_affine=atlas.affine, target_shape=atlas.shape[:3])
-    # 提取时间序列
-    time_series = masker.fit_transform(img)
-    # 计算连接矩阵 BN Atlas=246×246 其值分布在 (-1.0, 1.0] 之间
-    correlation_matrix = connectome.ConnectivityMeasure(kind='correlation', standardize='zscore_sample').fit_transform([time_series])[0] 
-    np.save(save_matrix_path, correlation_matrix)
-
-    end_time = time.time()
-    print(f'It took {round((end_time - start_time)/60, 4)} minutes to process {sub_name}.')
+    elif not os.path.exists(save_matrix_path):
+        img = nib.load(files[0]) # 本数据集每个img的时间序列为100
+        # 删除前5个和后5个时间维度的图像
+        img = nib.Nifti1Image(img.get_fdata()[...,5:-5], img.affine, img.header)
+        img = image.resample_img(img, target_affine=atlas.affine, target_shape=atlas.shape[:3])
+        # 提取时间序列
+        time_series = masker.fit_transform(img)
+        # 计算连接矩阵 BN Atlas=246×246 其值分布在 (-1.0, 1.0] 之间
+        correlation_matrix = connectome.ConnectivityMeasure(kind='correlation', standardize='zscore_sample').fit_transform([time_series])[0] 
+        # 保存连接矩阵和其热力图
+        np.save(save_matrix_path, correlation_matrix)
+        save_connection_matrix(correlation_matrix=correlation_matrix, save_path=save_pic_path)
+    elif os.path.exists(save_matrix_path) and not os.path.exists(save_pic_path):
+        correlation_matrix = np.load(save_matrix_path)
+        # 保存热力图
+        save_connection_matrix(correlation_matrix=correlation_matrix, save_path=save_pic_path)
     
+    end_time = time.time()
+    print(f'It took {round((end_time - start_time)/60, 2)} minutes to process {sub_name}.')
+   
     ### 对连接矩阵的可视化分析 ###
-    # draw_correlation_matrix(correlation_matrix)   
     # # 获取节点坐标
     # coordinates = plotting.find_parcellation_cut_coords(labels_img=atlas)  
     # # 绘制脑图谱连接网络
     # plotting.plot_connectome(correlation_matrix, coordinates, edge_threshold='80%', node_size=10)
     # # 显示图谱
     # plotting.show()
-    
