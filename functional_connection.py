@@ -102,6 +102,7 @@ for sub_func_path in SUBJECTS_FUNC_PATH:
         img = nib.load(files[0]) # 本数据集每个img的时间序列为100
         # 删除前5个和后5个时间维度的图像
         img = nib.Nifti1Image(img.get_fdata()[...,5:-5], img.affine, img.header)
+        # 对原始图像进行上采样与Altas对齐
         img = image.resample_img(img, target_affine=atlas.affine, target_shape=atlas.shape[:3])
         # 提取时间序列
         time_series = masker.fit_transform(img)
