@@ -64,7 +64,7 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
 
 
 """ 超参数 """
-batch_size = 1
+batch_size = len(all_data_pair)/2
 learning_rate = 0.001
 epochs = 100
 
