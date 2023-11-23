@@ -38,7 +38,7 @@ encoding = np.array(encoding) # (72, 245+244+243+...+1)
 
 # 二维UMAP
 start_time = time.time()
-mapper = umap.UMAP(n_neighbors=len(label)-1, n_components=2, n_epochs=100, learning_rate=0.01, min_dist=0.001).fit(encoding)
+mapper = umap.UMAP(n_neighbors=len(label)-1, n_components=2, metric='euclidean', n_epochs=100, learning_rate=0.01, min_dist=0.001).fit(encoding)
 X_umap_2d = mapper.embedding_
 end_time = time.time()
 print(f'It took {round((end_time-start_time)/60, 2)} minutes to UMAP to 2D')
@@ -50,7 +50,7 @@ plt.show()
 
 # 三维UMAP
 start_time = time.time()
-mapper = umap.UMAP(n_neighbors=len(label)-1, n_components=3, n_epochs=100, learning_rate=0.01, min_dist=0.001).fit(encoding)
+mapper = umap.UMAP(n_neighbors=len(label)-1, n_components=3, metric='euclidean', n_epochs=100, learning_rate=0.01, min_dist=0.001).fit(encoding)
 X_umap_3d = mapper.embedding_
 end_time = time.time()
 print(f'It took {round((end_time-start_time)/60, 2)} minutes to UMAP to 3D')
@@ -80,7 +80,7 @@ pca_2d = pca_process(arr=encoding, dim=2)
 pca_2d = MinMaxScaler().fit_transform(pca_2d)
 for (index, value), _ in zip(enumerate(pca_2d), tqdm(range(len(pca_2d)))):
     plt.scatter(value[0], value[1], color=color[label[index]], marker=marker[label[index]])
-plt.title('Feature Matrix UMAP 2D', fontdict={'family':'Times New Roman','size':20})
+plt.title('Feature Matrix PCA 2D', fontdict={'family':'Times New Roman','size':20})
 plt.show()
 
 # 三维PCA
@@ -89,5 +89,5 @@ pca_3d = MinMaxScaler().fit_transform(pca_3d)
 ax = plt.subplot(projection = '3d') 
 for (index, value), _ in zip(enumerate(pca_3d), tqdm(range(len(pca_3d)))):
     ax.scatter(value[0], value[1], value[2], color=color[label[index]], marker=marker[label[index]])
-plt.title('Feature Matrix UMAP 2D', fontdict={'family':'Times New Roman','size':20})
+plt.title('Feature Matrix PCA 3D', fontdict={'family':'Times New Roman','size':20})
 plt.show()

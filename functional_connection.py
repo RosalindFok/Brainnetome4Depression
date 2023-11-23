@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 """ 功能连接网络 """
 import os, csv, time, json
 import nibabel as nib
@@ -25,6 +26,7 @@ def save_connection_matrix(correlation_matrix : np.array, save_path : str):
     plt.figure(figsize=(10, 10))
     plt.imshow(correlation_matrix, interpolation="nearest", cmap="RdBu_r", vmax=0.8, vmin=-0.8)
     plt.savefig(save_path)
+    plt.close()
 
 """ 对脑图谱的可视化 """
 def draw_atlas(atlas : nib.nifti1.Nifti1Image):
@@ -51,7 +53,7 @@ def draw_atlas(atlas : nib.nifti1.Nifti1Image):
 atlas = nib.load(path_join(BN_Atlas_path, 'BN_Atlas_246_1mm.nii.gz')) # dim[1~3] = [182 218 182]
 # atlas = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm').maps
 # 对图谱的可视化
-# draw_atlas(atlas)
+draw_atlas(atlas)
 
 # 定义一个标签掩码器
 masker = maskers.NiftiLabelsMasker(labels_img=atlas, standardize='zscore_sample')
