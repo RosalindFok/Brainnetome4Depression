@@ -1,5 +1,6 @@
+# -*- coding: UTF-8 -*-
 import os
-
+ 
 """ 简单文件操作 """
 path_join = lambda root, leaf: os.path.join(root, leaf)
 # 将root路径下含有字段string的所有文件的路径生成一个列表
@@ -15,5 +16,11 @@ PARICIPANTS_INFO = path_join(DEPRESSION_PATH, 'participants.tsv')
 PARICIPANTS_INFO_JSON = path_join('..', 'participants_information.json')
 CONNECTION_MATRIX = path_join('..', 'connection_matrix')
 check_path_or_create(CONNECTION_MATRIX)
-BN_Atlas_path = path_join('.', 'BN_Atlas')
-BNA_MATRIX_PATH = path_join(BN_Atlas_path, 'BNA_matrix_binary_246x246.csv')
+BNA_PATH = path_join('.', 'BN_Atlas')
+BNA_MATRIX_PATH = path_join(BNA_PATH, 'BNA_matrix_binary_246x246.csv')
+BNA_SUBREGION_PATH = path_join(BNA_PATH, 'subregions.json')
+
+""" 聚合方式 """
+aggregation_lobe = 'lobe'
+aggregation_gyrus = 'gyrus'
+aggregation_not = 'not'

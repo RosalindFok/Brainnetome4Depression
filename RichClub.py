@@ -1,3 +1,4 @@
+# -*- coding: UTF-8 -*-
 # Rich-club organization of the human connectome.  https://doi.org/10.1523/JNEUROSCI.3539-11.2011
 
 

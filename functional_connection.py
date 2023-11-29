@@ -50,9 +50,11 @@ def draw_atlas(atlas : nib.nifti1.Nifti1Image):
 
 """ Atlas """
 # Brainnetome Atlas - Brainnetome Center and National Laboratory of Pattern Recognition(NLPR)
-atlas = nib.load(path_join(BN_Atlas_path, 'BN_Atlas_246_1mm.nii.gz')) # dim[1~3] = [182 218 182]
+atlas = nib.load(path_join(BNA_PATH, 'BN_Atlas_246_1mm.nii.gz')) # dim[1~3] = [182 218 182]
+# Harvard-Oxford
 # atlas = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm').maps
-# 对图谱的可视化
+# labels = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm').labels
+# 对图谱的解析
 draw_atlas(atlas)
 
 # 定义一个标签掩码器

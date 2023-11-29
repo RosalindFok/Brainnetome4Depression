@@ -10,4 +10,4 @@
 #DSUB -e %J.out
 #DSUB -o %J.out
 export export PYTHONUNBUFFERED=1
-python functional_connection.py
+python run.py
