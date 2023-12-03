@@ -55,7 +55,7 @@ atlas = nib.load(path_join(BNA_PATH, 'BN_Atlas_246_1mm.nii.gz')) # dim[1~3] = [1
 # atlas = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm').maps
 # labels = datasets.fetch_atlas_harvard_oxford('cort-maxprob-thr25-2mm').labels
 # 对图谱的解析
-draw_atlas(atlas)
+# draw_atlas(atlas)
 
 # 定义一个标签掩码器
 masker = maskers.NiftiLabelsMasker(labels_img=atlas, standardize='zscore_sample')
@@ -90,7 +90,7 @@ nibabel.load返回一个Nifti1Image类型变量
     ALFF(Amplitude of Low Frequency Fluctuation):揭示了区域自发活动的 BOLD 信号强度.
 """
 
-for sub_func_path in SUBJECTS_FUNC_PATH:
+for sub_func_path,sub_anat_path in zip(SUBJECTS_FUNC_PATH, SUBJECTS_ANAT_PATH):
     start_time = time.time()
 
     files = select_path_list(sub_func_path[0], '.nii')
@@ -100,8 +100,19 @@ for sub_func_path in SUBJECTS_FUNC_PATH:
     state = '0' if state == 'control' else '1' if state == 'depr' else exit(1) # 0-健康人群 1代表患者
     save_matrix_path = path_join(CONNECTION_MATRIX, full_name+'_'+state+'.npy')
     save_pic_path = path_join(CONNECTION_MATRIX, full_name+'_'+state+'.svg') 
+    save_ntw_path = path_join(CONNECTION_MATRIX, full_name+'_network_'+state+'.svg') 
+    
+    # 连接矩阵和热力图均存在
     if os.path.exists(save_matrix_path) and os.path.exists(save_pic_path):
-        continue
+        ### 绘制相互作用图 ###
+        correlation_matrix = np.load(save_matrix_path)
+        np.fill_diagonal(correlation_matrix, 0)
+        correlation_matrix = np.where(correlation_matrix>=0.7, correlation_matrix, 0)
+        # 获取节点坐标
+        coordinates = plotting.find_parcellation_cut_coords(labels_img=atlas)  
+        # 绘制脑图谱相互作用网络
+        plotting.plot_connectome(correlation_matrix, coordinates, node_size=10, colorbar=True, output_file=save_ntw_path)
+    # 连接矩阵信息不存在
     elif not os.path.exists(save_matrix_path):
         img = nib.load(files[0]) # 本数据集每个img的时间序列为100
         # 删除前5个和后5个时间维度的图像
@@ -115,6 +126,7 @@ for sub_func_path in SUBJECTS_FUNC_PATH:
         # 保存连接矩阵和其热力图
         np.save(save_matrix_path, correlation_matrix)
         save_connection_matrix(correlation_matrix=correlation_matrix, save_path=save_pic_path)
+    # 连接矩阵存在 但是热力图不存在
     elif os.path.exists(save_matrix_path) and not os.path.exists(save_pic_path):
         correlation_matrix = np.load(save_matrix_path)
         # 保存热力图
@@ -123,10 +135,4 @@ for sub_func_path in SUBJECTS_FUNC_PATH:
     end_time = time.time()
     print(f'It took {round((end_time - start_time)/60, 2)} minutes to process {sub_name}.')
    
-    ### 对连接矩阵的可视化分析 ###
-    # # 获取节点坐标
-    # coordinates = plotting.find_parcellation_cut_coords(labels_img=atlas)  
-    # # 绘制脑图谱连接网络
-    # plotting.plot_connectome(correlation_matrix, coordinates, edge_threshold='80%', node_size=10)
-    # # 显示图谱
-    # plotting.show()
+    

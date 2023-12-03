@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
 """ GNN """
-import os, torch, time, json, random, copy, argparse
+import os, torch, time, json, random, copy, argparse, yaml
 import numpy as np
 from load_path  import *
 from tqdm import tqdm
@@ -81,7 +81,8 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
     # 246×246 matrix for each participants
     connected_matrix = np.load(file) # 246×246 取值(-1,1]
 
-    # /*** 反事实研究 ***/
+    # /*** 反事实研究START ***/
+    use_normal_random = False # True
     if aggregation_type == aggregation_lobe:
         # 对7个脑叶
         mask_list = [lobe_index[lobe] for lobe in lobe_index]
@@ -89,8 +90,8 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
         if not counterfactual_sector < 0:
             sector_name = lobe_full_name[counterfactual_sector]
             for i in range(mask_list[counterfactual_sector][0], mask_list[counterfactual_sector][1]+1):
-                connected_matrix[i, :] = -1.1#np.random.normal(0, 1, size=connected_matrix.shape[1])
-                connected_matrix[:, i] = -1.1#np.random.normal(0, 1, size=connected_matrix.shape[0])
+                connected_matrix[i, :] = np.random.normal(0, 1, size=connected_matrix.shape[1]) if use_normal_random else -1.1
+                connected_matrix[:, i] = np.random.normal(0, 1, size=connected_matrix.shape[0]) if use_normal_random else -1.1
         else:
             sector_name = 'No Counterfactual'
     elif aggregation_type == aggregation_gyrus:
@@ -100,8 +101,8 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
         if not counterfactual_sector < 0:
             sector_name = gyrus_full_name[counterfactual_sector]
             for i in range(mask_list[counterfactual_sector][0], mask_list[counterfactual_sector][1]+1):
-                connected_matrix[i, :] = -1.1#np.random.normal(0, 1, size=connected_matrix.shape[1])
-                connected_matrix[:, i] = -1.1#np.random.normal(0, 1, size=connected_matrix.shape[0])
+                connected_matrix[i, :] = np.random.normal(0, 1, size=connected_matrix.shape[1]) if use_normal_random else -1.1
+                connected_matrix[:, i] = np.random.normal(0, 1, size=connected_matrix.shape[0]) if use_normal_random else -1.1
         else:
             sector_name = 'No Counterfactual'
     elif aggregation_type == aggregation_not:
@@ -109,12 +110,12 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
         assert counterfactual_sector < min(connected_matrix.shape[0], connected_matrix.shape[1])
         sector_name = str(counterfactual_sector)
         if not counterfactual_sector < 0:
-            connected_matrix[counterfactual_sector, :] = -1.1#np.random.normal(0, 1, size=connected_matrix.shape[1])
-            connected_matrix[:, counterfactual_sector] = -1.1#np.random.normal(0, 1, size=connected_matrix.shape[0])
+            connected_matrix[counterfactual_sector, :] = np.random.normal(0, 1, size=connected_matrix.shape[1]) if use_normal_random else -1.1
+            connected_matrix[:, counterfactual_sector] = np.random.normal(0, 1, size=connected_matrix.shape[0]) if use_normal_random else -1.1
     else:
         print(f'Please check you aggregation type = {aggregation_type}')
         exit(1)
-    # /*** 反事实研究 ***/
+    # /*** 反事实研究END ***/
 
     embedding_from_edges = {} # key(subregion id) : value(embedding 245 from its edges)
     for i in range(len(connected_matrix)):
@@ -125,7 +126,6 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
         
         embedding_from_edges[i] = this_subregion_embedding_from_edges
     
-    # 将embedding_from_edge 和 embedding_from_nbrs 进行拼接
     # 需要考虑图层面的任务 可解释性则研究边层面、节点层面
     embeddings = [] # 246×490
     for subregion_id in embedding_from_edges.keys():
@@ -162,7 +162,7 @@ def randomly_choose_half_point(m : int, n : int)->list:
             position.append((x,y))
     return random.sample(position, len(position)//2)
 # 72 -> 465. 51 * 5 = 255; 21 * 10 = 210
-noise = 1e-4
+noise = 1e-1#1e-4
 original_keys = copy.deepcopy(list(all_data_pair.keys()))
 for name in original_keys:
     (results, label) = all_data_pair[name]
@@ -191,9 +191,11 @@ for name in original_keys:
 
 
 """ 超参数 """
-batch_size = len(all_data_pair)
-learning_rate = 0.0001 # 0.0001 great MLP
-epochs = 100
+with open(YAML_PATH, 'r') as file:
+    yaml_data = yaml.load(file, Loader=yaml.FullLoader)
+batch_size = len(all_data_pair) if yaml_data['batch_size'] == None else yaml_data['batch_size']
+learning_rate = yaml_data['learning_rate']
+epochs = yaml_data['epochs']
 
 """ 算力设备 """
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -254,8 +256,11 @@ class MLP(Module):
         self._features = Sequential(
             # MLP learning rate = 0.0001 is great
             Linear(in_features, 2**12), self.activation_function,
+            nn.Dropout(0.5),
             Linear(2**12      , 2**8 ), self.activation_function,
-            Linear(2**8       , 2**4 ), self.activation_function
+            nn.Dropout(0.5),
+            Linear(2**8       , 2**4 ), self.activation_function,
+            nn.Dropout(0.5),
         )
         # 分类层
         self._classifier = Linear(2**4, 1)
@@ -279,7 +284,18 @@ def calculate_AUC(pred_list : list, true_list : list):
 
     assert roc_auc == roc_auc_score(true_np, pred_np)
     return roc_auc, pred_list
-    
+
+# 给loss添加正则化
+def norm_loss(loss, norm_type='L2'):
+    re_lambda = 0.001
+    if norm_type == 'L1':
+        # 添加L1正则化
+        re_norm = sum(abs(p).sum()  for p in model.parameters())
+    elif norm_type == 'L2':
+        # 添加L2正则化
+        re_norm = sum(p.pow(2.0).sum()  for p in model.parameters())
+    return loss + re_lambda * re_norm
+
 if __name__ == '__main__':
     train_loader, validation_loader, test_loader = get_train_value_dataloader()
 
@@ -316,6 +332,8 @@ if __name__ == '__main__':
             pred_list += y_pred.cpu()
             true_list += yt.cpu()
             l = loss(y_pred, yt)
+            # 损失函数正则化 
+            l = norm_loss(l)
             train_loss_list.append(l.item())
             # 反向传播的三步
             optimizer.zero_grad() # 清除梯度
@@ -335,6 +353,8 @@ if __name__ == '__main__':
                 pred_list += y_pred.cpu()
                 true_list += yv.cpu()
                 l = loss(y_pred, yv)
+                # 损失函数正则化 
+                l = norm_loss(l)
                 val_loss_list.append(l.item())
                 
         roc_auc, _ = calculate_AUC(pred_list, true_list)

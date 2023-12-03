@@ -12,6 +12,7 @@ check_path_or_create = lambda path: os.makedirs(path) if not os.path.exists(path
 DEPRESSION_PATH = path_join('..', 'depression_ds002748')
 SUBJECTS_PATH = select_path_list(DEPRESSION_PATH, 'sub')
 SUBJECTS_FUNC_PATH = [select_path_list(x, 'func') for x in SUBJECTS_PATH]
+SUBJECTS_ANAT_PATH = [select_path_list(x, 'anat') for x in SUBJECTS_PATH]
 PARICIPANTS_INFO = path_join(DEPRESSION_PATH, 'participants.tsv')
 PARICIPANTS_INFO_JSON = path_join('..', 'participants_information.json')
 CONNECTION_MATRIX = path_join('..', 'connection_matrix')
@@ -19,6 +20,7 @@ check_path_or_create(CONNECTION_MATRIX)
 BNA_PATH = path_join('.', 'BN_Atlas')
 BNA_MATRIX_PATH = path_join(BNA_PATH, 'BNA_matrix_binary_246x246.csv')
 BNA_SUBREGION_PATH = path_join(BNA_PATH, 'subregions.json')
+YAML_PATH = path_join('.', 'config.yaml')
 
 """ 聚合方式 """
 aggregation_lobe = 'lobe'
