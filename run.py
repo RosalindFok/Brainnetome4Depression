@@ -12,3 +12,6 @@ for counterfactual_sector in range(-1, max_sector): # 24个脑回
     if not exit_code == 0: # exit_code is not 0 <--> sth wrong with the training
         print(f'Error: running {parameters_string}, please check')
         break
+
+# Cleanup unnecessary files and optimize the local repository
+os.system('git gc --prune=now')

@@ -1,5 +1,4 @@
 #!/bin/bash
-#!/bin/bash
 #DSUB -A root.bingxing2.gpuuser486
 #DSUB -q root.default
 #DSUB -l wuhanG5500

@@ -2,6 +2,7 @@
 """ GNN """
 import os, torch, time, json, random, copy, argparse, yaml
 import numpy as np
+import matplotlib.pyplot as plt
 from load_path  import *
 from tqdm import tqdm
 from typing import Tuple
@@ -16,10 +17,10 @@ from torch.nn import (
     Module,
     Linear,
     Tanh,
+    ReLU,
     Sigmoid,
     Sequential
 )
-from load_path import *
 np.random.seed(0)
 
 """ 参数解析 """
@@ -54,7 +55,7 @@ for lobe in subregion_info:
     lobe_index[lobe] = [l_startIdx, l_endIdx]
 
 
-""" 构建每个脑区的embedding """
+""" Embedding for each subregion """
 # 聚合
 def aggregation_embeddings(embeddings : list[np.array], start : int, end : int)->np.array:
     array = embeddings[start : end+1]
@@ -81,42 +82,6 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
     # 246×246 matrix for each participants
     connected_matrix = np.load(file) # 246×246 取值(-1,1]
 
-    # /*** 反事实研究START ***/
-    use_normal_random = False # True
-    if aggregation_type == aggregation_lobe:
-        # 对7个脑叶
-        mask_list = [lobe_index[lobe] for lobe in lobe_index]
-        assert counterfactual_sector < len(mask_list)
-        if not counterfactual_sector < 0:
-            sector_name = lobe_full_name[counterfactual_sector]
-            for i in range(mask_list[counterfactual_sector][0], mask_list[counterfactual_sector][1]+1):
-                connected_matrix[i, :] = np.random.normal(0, 1, size=connected_matrix.shape[1]) if use_normal_random else -1.1
-                connected_matrix[:, i] = np.random.normal(0, 1, size=connected_matrix.shape[0]) if use_normal_random else -1.1
-        else:
-            sector_name = 'No Counterfactual'
-    elif aggregation_type == aggregation_gyrus:
-        # 对24个脑回
-        mask_list = [gyrus_index[gyrus] for gyrus in gyrus_index]
-        assert counterfactual_sector < len(mask_list)
-        if not counterfactual_sector < 0:
-            sector_name = gyrus_full_name[counterfactual_sector]
-            for i in range(mask_list[counterfactual_sector][0], mask_list[counterfactual_sector][1]+1):
-                connected_matrix[i, :] = np.random.normal(0, 1, size=connected_matrix.shape[1]) if use_normal_random else -1.1
-                connected_matrix[:, i] = np.random.normal(0, 1, size=connected_matrix.shape[0]) if use_normal_random else -1.1
-        else:
-            sector_name = 'No Counterfactual'
-    elif aggregation_type == aggregation_not:
-        # 对246个亚区
-        assert counterfactual_sector < min(connected_matrix.shape[0], connected_matrix.shape[1])
-        sector_name = str(counterfactual_sector)
-        if not counterfactual_sector < 0:
-            connected_matrix[counterfactual_sector, :] = np.random.normal(0, 1, size=connected_matrix.shape[1]) if use_normal_random else -1.1
-            connected_matrix[:, counterfactual_sector] = np.random.normal(0, 1, size=connected_matrix.shape[0]) if use_normal_random else -1.1
-    else:
-        print(f'Please check you aggregation type = {aggregation_type}')
-        exit(1)
-    # /*** 反事实研究END ***/
-
     embedding_from_edges = {} # key(subregion id) : value(embedding 245 from its edges)
     for i in range(len(connected_matrix)):
         this_subregion_embedding_from_edges = [] 
@@ -132,20 +97,20 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
         embeddings.append(np.array(embedding_from_edges[subregion_id]))
 
     results = []
+    # 按照7个lobe(脑叶)进行节点聚合
     if aggregation_type == aggregation_lobe:
-        # 按照7个lobe(脑叶)进行节点聚合
         for lobe in lobe_index:
             startIdx, endIdx = lobe_index[lobe][0], lobe_index[lobe][1]
             aggregation_result = aggregation_embeddings(embeddings, startIdx, endIdx)
             results.append(aggregation_result) # 7×245
+    # 按照24个gyrus(脑回)进行节点聚合
     elif aggregation_type == aggregation_gyrus:
-        # 按照24个gyrus(脑回)进行节点聚合
         for gyrus in gyrus_index:
             startIdx, endIdx = gyrus_index[gyrus][0], gyrus_index[gyrus][1]
             aggregation_result = aggregation_embeddings(embeddings, startIdx, endIdx)
             results.append(aggregation_result) # 24×245
+    # 不进行节点聚合
     elif aggregation_type == aggregation_not:
-        # 不进行节点聚合
         results = embeddings # 246*245
     else:
         print(f'Please check you aggregation type = {aggregation_type}')
@@ -162,7 +127,7 @@ def randomly_choose_half_point(m : int, n : int)->list:
             position.append((x,y))
     return random.sample(position, len(position)//2)
 # 72 -> 465. 51 * 5 = 255; 21 * 10 = 210
-noise = 1e-1#1e-4
+noise = 1e-1
 original_keys = copy.deepcopy(list(all_data_pair.keys()))
 for name in original_keys:
     (results, label) = all_data_pair[name]
@@ -196,10 +161,12 @@ with open(YAML_PATH, 'r') as file:
 batch_size = len(all_data_pair) if yaml_data['batch_size'] == None else yaml_data['batch_size']
 learning_rate = yaml_data['learning_rate']
 epochs = yaml_data['epochs']
+save_weights_pth = yaml_data['save_weights_pth']
 
 """ 算力设备 """
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f'Device = {device}')
+
 
 """ 制作datasets """
 class GetData(Dataset):
@@ -225,24 +192,51 @@ def get_train_value_dataloader():
     participants, embeddings, labels = [], [], []
     for name in all_data_pair:
         participants.append(name)
-        embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0]).flatten().tolist())
+
+        # TODO
+        # 脑叶
+        if aggregation_type == aggregation_lobe:
+            if counterfactual_sector >= 0:
+                sector_name = lobe_full_name[counterfactual_sector]
+                embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0])[counterfactual_sector].tolist())
+            else:
+                sector_name = 'All'
+                embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0]).flatten().tolist())
+        # 脑回
+        elif aggregation_type == aggregation_gyrus:
+            if counterfactual_sector >= 0:
+                sector_name = gyrus_full_name[counterfactual_sector]
+                embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0])[counterfactual_sector].tolist())
+            else:
+                sector_name = 'All'
+                embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0]).flatten().tolist())
+        # 亚区
+        elif aggregation_type == aggregation_not:
+            if counterfactual_sector >= 0:
+                sector_name = str(counterfactual_sector)
+                embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0])[counterfactual_sector].tolist())
+            else:
+                sector_name = 'All'
+                embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0]).flatten().tolist())
+        else:
+            print(f'Please check you aggregation type = {aggregation_type}')
+            exit(1)
+
+        # embeddings.append(MinMaxScaler().fit_transform(all_data_pair[name][0]).flatten().tolist())
         labels.append(all_data_pair[name][1])
     
     # 人工核验点
     assert len(participants) == len(embeddings) == len(labels) == 51*5 + 21*10
 
     # 全样本 465 = 255 + 210. 255 = [0~50]+[72~275]; 210 = [51~71]+[276~464]
-    # 训练集:验证集:测试集 = 403:31:31 = (221:182):(17+14):(17+14) 
-    train_loader      = make_dataloader(participants[  :51]+participants[72:242] + participants[51:72]+participants[276:437], 
-                                        embeddings[    :51]+embeddings[  72:242] + embeddings[  51:72]+embeddings[  276:437], 
-                                        labels[        :51]+labels[      72:242] + labels[      51:72]+labels[      276:437])
-    validation_loader = make_dataloader(participants[242:259] + participants[437:451], 
-                                        embeddings[  242:259] + embeddings[  437:451], 
-                                        labels[      242:259] + labels[      437:451])
-    test_loader       = make_dataloader(participants[259:276] + participants[451:465], 
-                                        embeddings[  259:276] + embeddings[  451:465], 
-                                        labels[      259:276] + labels[      451:465])
-    return train_loader, validation_loader, test_loader
+    # 训练集:测试集 = 372:93. 372=204+168; 93=51+42
+    train_loader = make_dataloader(participants[72:-21],
+                                   embeddings[  72:-21],
+                                   labels[      72:-21])
+    test_loader  = make_dataloader(participants[:72]+participants[-21:],
+                                   embeddings[  :72]+embeddings[  -21:],
+                                   labels[      :72]+labels[      -21:])
+    return sector_name, train_loader, test_loader
 
 
 """ MLP """
@@ -254,13 +248,9 @@ class MLP(Module):
         # lobe: in_features= 1716 -> 2**10+
         # gyrus:in_features= 5880 -> 2**12+
         self._features = Sequential(
-            # MLP learning rate = 0.0001 is great
             Linear(in_features, 2**12), self.activation_function,
-            nn.Dropout(0.5),
             Linear(2**12      , 2**8 ), self.activation_function,
-            nn.Dropout(0.5),
             Linear(2**8       , 2**4 ), self.activation_function,
-            nn.Dropout(0.5),
         )
         # 分类层
         self._classifier = Linear(2**4, 1)
@@ -296,8 +286,10 @@ def norm_loss(loss, norm_type='L2'):
         re_norm = sum(p.pow(2.0).sum()  for p in model.parameters())
     return loss + re_lambda * re_norm
 
+
 if __name__ == '__main__':
-    train_loader, validation_loader, test_loader = get_train_value_dataloader()
+    # train_loader, validation_loader, test_loader = get_train_value_dataloader()
+    sector_name, train_loader, test_loader = get_train_value_dataloader()
 
     start_time = time.time()
     in_features = next(iter(train_loader))[1].shape[-1] # lobe:1716=7*245, gyrus:5880=24*245
@@ -315,8 +307,7 @@ if __name__ == '__main__':
     # 优化函数
     optimizer = optim.Adam(model.parameters(), lr=learning_rate) 
 
-    # 利用训练集和验证集更新模型参数
-    y_train_loss, y_valid_loss = [], [] # 用于损失函数值绘图 
+    # 利用训练集更新模型参数
     for ep in range(epochs):
         ep_start = time.time()
         train_loss_list = []
@@ -332,45 +323,16 @@ if __name__ == '__main__':
             pred_list += y_pred.cpu()
             true_list += yt.cpu()
             l = loss(y_pred, yt)
-            # 损失函数正则化 
+            # # 损失函数正则化 
             l = norm_loss(l)
             train_loss_list.append(l.item())
             # 反向传播的三步
             optimizer.zero_grad() # 清除梯度
             l.backward() # 反向传播
+            # if hasattr(torch.cuda, 'empty_cache'):
+            #     torch.cuda.empty_cache()
             optimizer.step() # 优化更新
-        
-        # 验证
-        model.eval()
-        val_loss_list = []
-        pred_list = []
-        true_list = []
-        with torch.no_grad():
-            for user, xv, yv in validation_loader:
-                if torch.cuda.is_available: # 将数据迁移到GPU上
-                    xv, yv = xv.cuda(), yv.cuda()
-                _, y_pred = model(xv)
-                pred_list += y_pred.cpu()
-                true_list += yv.cpu()
-                l = loss(y_pred, yv)
-                # 损失函数正则化 
-                l = norm_loss(l)
-                val_loss_list.append(l.item())
-                
-        roc_auc, _ = calculate_AUC(pred_list, true_list)
-        
-        ep_end = time.time()
-        mean_train_loss, mean_val_loss = round(np.mean(train_loss_list),12), round(np.mean(val_loss_list),12)
-        y_train_loss.append(mean_train_loss)
-        y_valid_loss.append(mean_val_loss)
-        # print(f'epoch: {ep}; train loss: {mean_train_loss}; val loss: {mean_val_loss}; val AUC: {roc_auc}; {round((ep_end-ep_start)/60,3)} minutes.')
-    
-    assert len(y_train_loss) == len(y_valid_loss)
-    # 保存训练和验证损失
-    x = np.array(list(range(1, epochs+1)))
-    y_train_loss = np.array(y_train_loss)
-    y_valid_loss = np.array(y_valid_loss)
-    
+   
     # 在测试集上计算AUC, LogLoss
     model.eval()
     pred_list = []
@@ -388,7 +350,8 @@ if __name__ == '__main__':
     logLoss = log_loss(y_true, y_pred)
 
     # 保存模型参数
-    torch.save(model.state_dict(), 'model.pth')
+    if save_weights_pth:
+        torch.save(model.state_dict(), f'{sector_name}_model.pth')
     
     end_time = time.time()
     print(f'It took {round((end_time-start_time)/60, 2) } minutes to train. counterfactual_sector is {sector_name}. Test AUC = {roc_auc}. Test LogLoss = {logLoss}\n')
