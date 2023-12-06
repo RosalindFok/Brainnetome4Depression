@@ -193,7 +193,6 @@ def get_train_value_dataloader():
     for name in all_data_pair:
         participants.append(name)
 
-        # TODO
         # 脑叶
         if aggregation_type == aggregation_lobe:
             if counterfactual_sector >= 0:
