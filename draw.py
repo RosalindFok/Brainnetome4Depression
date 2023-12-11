@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 import re
+import numpy as np
 import matplotlib.pyplot as plt
 
 """ lobe """
@@ -215,4 +216,122 @@ plt.title('AUC & LogLoss (24 gyrus)', fontname='Times New Roman', fontsize=20)
 plt.xticks(gyrus_name, rotation=-45, fontname='Times New Roman', fontsize=16)
 plt.grid()
 plt.legend()
+plt.show()
+
+
+""" 超参数敏感性实验"""
+# epochs = 100; learning_rete vary
+lr_list = ['0.0001', '0.0002', '0.0005', '0.001', '0.002', '0.005', '0.01', '0.02', '0.05']
+# [lobe],[gyrus]
+auc_of_diff_lr = [[0.9691876750700279, 0.9505135387488328, 0.9733893557422968], [0.9859943977591036, 0.9836601307189542 , 0.9747899159663865],
+                  [0.9654528478057889, 0.9598506069094304, 0.9407096171802054], [0.9761904761904763, 0.9761904761904762 , 0.9855275443510737],
+                  [0.9747899159663865, 0.9393090569561158, 0.9603174603174602], [0.9626517273576096, 0.9528478057889822 , 0.9831932773109243],
+                  [0.953781512605042 , 0.9402427637721755, 0.9897292250233426], [0.9864612511671335, 0.976190476190476  , 0.9640522875816993],
+                  [0.7495331465919701, 0.8566760037348273, 0.8398692810457516], [0.8258636788048552, 0.834733893557423  , 0.8120915032679739],
+                  [0.7994864612511672, 0.5               , 0.8172268907563026], [0.8081232492997199, 0.8130252100840336 , 0.8209617180205416],
+                  [0.8709150326797386, 0.8373015873015873, 0.8370681605975724], [0.8291316526610644, 0.47619047619047616, 0.7362278244631185],
+                  [0.8298319327731093, 0.7836134453781513, 0.4757236227824463], [0.7675070028011205, 0.5                , 0.8165266106442578],
+                  [0.5               , 0.5894024276377218, 0.5               ], [0.6811391223155929, 0.7394957983193277 , 0.5               ]]
+logloss_of_diff_lr = [[0.36389893740728957, 0.3581894420718056 , 0.34242286982081654], [0.3597563502380347 , 0.35374852314660543, 0.36926473816186695],
+                      [0.35215721388493065, 0.3599970194574259 , 0.3573829628982003 ], [0.37186002453060074, 0.3650168147648639 , 0.3631919463844666 ],
+                      [0.3636412393877985 , 0.38249303309651794, 0.36680583159101593], [0.4002286983552964 , 0.4358719809198711 , 0.4084480519611487 ],
+                      [0.3554710246197287 , 0.3557779695740392 , 0.34162770944402243], [0.409657610184645  , 0.382147915322724  , 0.3757167353914878 ],
+                      [0.9084755834095378 , 0.9398898966224242 , 1.1281149510567996 ], [0.7153921459316004 , 0.6884846508086607 , 0.6973935542020699 ],
+                      [0.825320389888155  , 0.9543245760568466 , 0.783787392074884  ], [1.1158099590635335 , 0.908230258239678  , 0.7161333787773795 ],
+                      [0.7333687496196409 , 0.6884614594816046 , 1.0801139357847667 ], [0.7217983709539257 , 0.7459776737887315 , 0.8189323303351931 ],
+                      [0.9593478112306022 , 1.1060280365009711 , 1.0571266271424362 ], [0.6904811609963767 , 0.7100202419263232 , 0.7883026863127237 ],
+                      [2.6594703020800567 , 0.7809180993533067 , 2.7293530942904636 ], [1.8953579167895798 , 2.321032851126042  , 0.688477070283367  ]]
+auc_lobe_lr =  [sum(auc_of_diff_lr[i])/len(auc_of_diff_lr[i]) for i in range(len(auc_of_diff_lr)) if i % 2 == 0]
+auc_gyrus_lr = [sum(auc_of_diff_lr[i])/len(auc_of_diff_lr[i]) for i in range(len(auc_of_diff_lr)) if i % 2 == 1]
+logloss_lobe_lr = [sum(logloss_of_diff_lr[i])/len(logloss_of_diff_lr[i]) for i in range(len(logloss_of_diff_lr)) if i % 2 == 0]
+logloss_gyrus_lr = [sum(logloss_of_diff_lr[i])/len(logloss_of_diff_lr[i]) for i in range(len(logloss_of_diff_lr)) if i % 2 == 1]
+assert len(lr_list) == len(auc_lobe_lr) == len(auc_gyrus_lr) == len(logloss_lobe_lr) == len(logloss_gyrus_lr)
+# lobe
+plt.subplot(2,2,1)
+plt.plot(lr_list, auc_lobe_lr, label='AUC', marker='o')
+plt.xticks(lr_list,['']*len(lr_list))
+plt.title('7 lobe', fontname='Times New Roman', fontsize=20)
+for i, value in enumerate(auc_lobe_lr):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.ylabel('AUC', fontname='Times New Roman', fontsize=16)
+plt.grid()
+plt.subplot(2,2,3)
+plt.plot(lr_list, logloss_lobe_lr, label='LogLoss', marker='*', color='orange')
+plt.xticks(lr_list, fontname='Times New Roman', fontsize=16)
+for i, value in enumerate(logloss_lobe_lr):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.xlabel('learning rate', fontname='Times New Roman', fontsize=16, loc='right')
+plt.ylabel('LogLoss', fontname='Times New Roman', fontsize=16)
+plt.grid()
+# gyrus
+plt.subplot(2,2,2)
+plt.plot(lr_list, auc_gyrus_lr, label='AUC', marker='o')
+plt.xticks(lr_list,['']*len(lr_list))
+plt.title('24 gyrus', fontname='Times New Roman', fontsize=20)
+for i, value in enumerate(auc_gyrus_lr):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.grid()
+plt.subplot(2,2,4)
+plt.plot(lr_list, logloss_gyrus_lr, label='LogLoss', marker='*', color='orange')
+plt.xticks(lr_list, fontname='Times New Roman', fontsize=16)
+for i, value in enumerate(logloss_gyrus_lr):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.xlabel('learning rate', fontname='Times New Roman', fontsize=16, loc='right')
+plt.grid()
+plt.show()
+
+# learning_rate = 0.0001; epochs vary
+# [lobe], [gyrus]
+ep_list = ['20', '50', '80', '100', '120', '150', '200']
+auc_of_diff_ep = [[0.9234360410830998, 0.9393090569561158, 0.9103641456582634], [0.9575163398692811 , 0.9593837535014006, 0.9598506069094304],
+                  [0.9481792717086834, 0.9201680672268907, 0.9551820728291316], [0.9771241830065359 , 0.9715219421101773, 0.9855275443510737],
+                  [0.9393090569561158, 0.930905695611578 , 0.9603174603174602], [0.9827264239028944 , 0.9808590102707749, 0.9738562091503267],
+                  [0.9547152194211017, 0.9547152194211017, 0.9677871148459383], [0.9813258636788048 , 0.9589169000933706, 0.9803921568627451],
+                  [0.9845938375350141, 0.9584500466853407, 0.9621848739495797], [0.9747899159663865 , 0.9794584500466853, 0.9789915966386554],
+                  [0.9262371615312791, 0.9505135387488328, 0.9836601307189542], [0.9780578898225956 , 0.9817927170868347, 0.9831932773109243],
+                  [0.9523809523809523, 0.9589169000933706, 0.9430438842203548], [0.9794584500466853 , 0.9836601307189542, 0.9822595704948646]]
+logloss_of_diff_ep = [[0.44584768111331785, 0.36458482535765613, 0.36012393446080926], [0.35387685325957613, 0.3587985716342382 , 0.35107431642074277],
+                      [0.33589669005950806, 0.3416631918313417 , 0.36144201881846916], [0.3497076157981912 , 0.35755573252822537, 0.34758951676467115],
+                      [0.3446379144300684 , 0.3619901061890185 , 0.3470498361609182 ], [0.3619481514784985 , 0.3739796902915889 , 0.34873252304724867],
+                      [0.3512683513030686 , 0.35007332898690247, 0.36840668397164344], [0.3684867898587656 , 0.36891949423048376, 0.35372899663289686],
+                      [0.34137393115006964, 0.36225926055211566, 0.34917416235692644], [0.36702997121922853, 0.37155884078515367, 0.3632852470204971 ],
+                      [0.341077993832579  , 0.36092038289545886, 0.3380004156817979 ], [0.39199928545795065, 0.3672952105425706 , 0.3681643144990141 ],
+                      [0.36733367203886297, 0.3443161918966849 , 0.36629112191881197], [0.37731049846498776, 0.37625073687830907, 0.3530087373145948]]
+auc_lobe_ep =  [sum(auc_of_diff_ep[i])/len(auc_of_diff_ep[i]) for i in range(len(auc_of_diff_ep)) if i % 2 == 0]
+auc_gyrus_ep = [sum(auc_of_diff_ep[i])/len(auc_of_diff_ep[i]) for i in range(len(auc_of_diff_ep)) if i % 2 == 1]
+logloss_lobe_ep = [sum(logloss_of_diff_ep[i])/len(logloss_of_diff_ep[i]) for i in range(len(logloss_of_diff_ep)) if i % 2 == 0]
+logloss_gyrus_ep = [sum(logloss_of_diff_ep[i])/len(logloss_of_diff_ep[i]) for i in range(len(logloss_of_diff_ep)) if i % 2 == 1]
+assert len(ep_list) == len(auc_lobe_ep) == len(auc_gyrus_ep) == len(logloss_lobe_ep) == len(logloss_gyrus_ep)
+# lobe
+plt.subplot(2,2,1)
+plt.plot(ep_list, auc_lobe_ep, label='AUC', marker='o')
+plt.xticks(ep_list,['']*len(ep_list))
+plt.title('7 lobe', fontname='Times New Roman', fontsize=20)
+for i, value in enumerate(auc_lobe_ep):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.ylabel('AUC', fontname='Times New Roman', fontsize=16)
+plt.grid()
+plt.subplot(2,2,3)
+plt.plot(ep_list, logloss_lobe_ep, label='LogLoss', marker='*', color='orange')
+plt.xticks(ep_list, fontname='Times New Roman', fontsize=16)
+for i, value in enumerate(logloss_lobe_ep):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.xlabel('epochs', fontname='Times New Roman', fontsize=16, loc='right')
+plt.ylabel('LogLoss', fontname='Times New Roman', fontsize=16)
+plt.grid()
+# gyrus
+plt.subplot(2,2,2)
+plt.plot(ep_list, auc_gyrus_ep, label='AUC', marker='o')
+plt.xticks(ep_list,['']*len(ep_list))
+plt.title('24 gyrus', fontname='Times New Roman', fontsize=20)
+for i, value in enumerate(auc_gyrus_ep):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.grid()
+plt.subplot(2,2,4)
+plt.plot(ep_list, logloss_gyrus_ep, label='LogLoss', marker='*', color='orange')
+plt.xticks(ep_list, fontname='Times New Roman', fontsize=16)
+for i, value in enumerate(logloss_gyrus_ep):
+    plt.text(i, value+0.001, str(round(value,3)), ha='center', va='bottom')
+plt.xlabel('epochs', fontname='Times New Roman', fontsize=16, loc='right')
+plt.grid()
 plt.show()

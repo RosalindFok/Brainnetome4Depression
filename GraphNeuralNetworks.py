@@ -56,8 +56,14 @@ for lobe in subregion_info:
 
 
 """ Embedding for each subregion """
-# 聚合
 def aggregation_embeddings(embeddings : list[np.array], start : int, end : int)->np.array:
+    """
+    聚合每个脑叶或者脑回中的亚区的embedding
+    :param embeddings:
+    :param start:
+    :param end:
+    :return: 
+    """
     array = embeddings[start : end+1]
     Euclidean_distance = np.zeros([end-start+1, end-start+1], dtype=float)
     for i in range(len(array)):
@@ -162,6 +168,7 @@ batch_size = len(all_data_pair) if yaml_data['batch_size'] == None else yaml_dat
 learning_rate = yaml_data['learning_rate']
 epochs = yaml_data['epochs']
 save_weights_pth = yaml_data['save_weights_pth']
+save_result_txt = yaml_data['save_result_txt']
 
 """ 算力设备 """
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -357,8 +364,9 @@ if __name__ == '__main__':
 
     # 可解释性分析结果记录
     result_file = 'result.txt'
-    with open(result_file, 'a' if os.path.exists(result_file) else 'w') as file:
-        file.write(f'{sector_name}\tAUC={roc_auc}\tLogLoss={logLoss}\n')
-        for x, y in zip(pred_list, true_list):
-            file.write(f'{str(x)}\t{str(y)}\n')
-        file.write('\n\n')
+    if save_result_txt:
+        with open(result_file, 'a' if os.path.exists(result_file) else 'w') as file:
+            file.write(f'{sector_name}\tAUC={roc_auc}\tLogLoss={logLoss}\n')
+            for x, y in zip(pred_list, true_list):
+                file.write(f'{str(x)}\t{str(y)}\n')
+            file.write('\n\n')

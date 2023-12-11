@@ -30,7 +30,7 @@ Dataset in OpenNeuro: [depression_ds002748](https://openneuro.org/datasets/ds002
 
 ## 2. Run on Windows
 Get functional connection: `python functional_connection.py`
-Change your hyperparameter in `config.yaml`
+Change your hyperparameter and save_model_weights/save_result_txt in `config.yaml`
 Change your aggregation type in `run.py` and then `python run.py`
 
 ## 3. Run on BSCC Platform
