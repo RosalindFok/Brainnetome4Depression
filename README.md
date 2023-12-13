@@ -45,9 +45,23 @@ djob # 查看作业id
 djob  -T 作业ID #取消作业
 ```
 
-## 4. Results and Original Data
-To save public store, they were zipped as `ori_data.zip`.<br>
+## 4. Original Data
 `result_lobe1/2/3.txt`: aggregation type is `lobe`.<br>
 `result_gyrus1/2/3.txt`: aggregation type is `gyrus`.<br>
-some of the results in: `draw.ipynb`.
+To save public store, all txt files were zipped as `ori_data.zip`.<br>
+`draw.ipynb`: AUC and LogLoss with lobe/gyrus or different epochs/learning_rate.
 
+## 5. Methods
+### 5.1. Brainnetome Atlas
+![viewer]('./figs/Atlas_1.svg')
+![correlation matrix]('./figs/Atlas_2.svg')
+## 5.2. preprocessing_pipeline
+![pipeline of preprocessing]('./figs/preprocessing_pipeline.svg)
+
+## 6. Results
+### 6.1. Aggregation via lobe or gyrus
+![lobe]('./figs/lobe_auc_logloss.svg)
+![gyrus]('./figs/gyrus_auc_logloss.svg)
+### 6.2. Different epochs or learning rate
+![learning rate]('./figs/diff_learningrate.svg)
+![epochs]('./figs/diff_epochs.svg)
