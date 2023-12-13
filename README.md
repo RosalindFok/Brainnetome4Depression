@@ -45,8 +45,9 @@ djob # 查看作业id
 djob  -T 作业ID #取消作业
 ```
 
-## 4. Original Data
+## 4. Results and Original Data
 To save public store, they were zipped as `ori_data.zip`.
 `result_lobe1/2/3.txt`: aggregation type is `lobe`
 `result_gyrus1/2/3.txt`: aggregation type is `gyrus`
 some of the results in: `draw.ipynb`
+
