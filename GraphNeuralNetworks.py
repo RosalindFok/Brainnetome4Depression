@@ -1,10 +1,11 @@
 # -*- coding: UTF-8 -*-
-""" GNN """
+""" 
+Graph Neural Networks, predict the probability of depression
+"""
+
 import os, torch, time, json, random, copy, argparse, yaml
 import numpy as np
-import matplotlib.pyplot as plt
 from load_path  import *
-from tqdm import tqdm
 from typing import Tuple
 from torch.utils.data import Dataset, DataLoader
 from torch import FloatTensor, Tensor, optim, nn
@@ -23,7 +24,7 @@ from torch.nn import (
 )
 np.random.seed(0)
 
-""" 参数解析 """
+# 参数解析
 parser = argparse.ArgumentParser(description='parameter')
 parser.add_argument('--counterfactual_sector', type=int)
 parser.add_argument('--aggregation_type', type=str)
@@ -31,15 +32,15 @@ args = parser.parse_args()
 counterfactual_sector = args.counterfactual_sector
 aggregation_type = args.aggregation_type
 
-""" 加载脑图谱分区信息 """
+# 加载脑图谱分区信息 
 if not os.path.exists(BNA_SUBREGION_PATH):
     print(f'Pleas check {BNA_SUBREGION_PATH}, make sure it is there.')
     exit(1)
 with open(BNA_SUBREGION_PATH, 'r') as file:
     # {lobe : {gyrus : "name labelID_start labelID_end", ...}, ...}
     subregion_info = json.load(file)
-lobe_index =  {} # {name : "startIdx endIdx"}. Idx = labelID - 1
-gyrus_index = {} # {name : "startIdx endIdx"}. Idx = labelID - 1
+lobe_index =  {}  # {name : "startIdx endIdx"}. Idx = labelID - 1
+gyrus_index = {}  # {name : "startIdx endIdx"}. Idx = labelID - 1
 lobe_full_name, gyrus_full_name = [],[]
 for lobe in subregion_info:
     lobe_full_name.append(lobe)
@@ -55,14 +56,23 @@ for lobe in subregion_info:
     lobe_index[lobe] = [l_startIdx, l_endIdx]
 
 
-""" Embedding for each subregion """
-def aggregation_embeddings(embeddings : list[np.array], start : int, end : int)->np.array:
+# Embedding for each subregion 
+def aggregation_embeddings(
+        embeddings : list[np.array], 
+        start : int, 
+        end : int,
+)->np.array:
     """
-    聚合每个脑叶或者脑回中的亚区的embedding
-    :param embeddings:
-    :param start:
-    :param end:
-    :return: 
+    聚合每个脑叶或者脑回中的亚区的嵌入向量
+    
+    Args:
+        embeddings : 若干亚区的嵌入向量构成的列表
+        start : 属于该脑叶/脑回的亚区起始坐标
+        end : 属于该脑叶/脑回的亚区终止坐标
+
+    Returns:
+        result : 对该脑叶/脑回进行聚合得到的聚合嵌入向量
+
     """
     array = embeddings[start : end+1]
     Euclidean_distance = np.zeros([end-start+1, end-start+1], dtype=float)
@@ -80,15 +90,15 @@ def aggregation_embeddings(embeddings : list[np.array], start : int, end : int)-
         result += weight*embedd
     return result
 # 72 participants
-all_data_pair = {} # key(sub-id) : value(matirx 246×490, label∈{0,1})
+all_data_pair = {}  # key(sub-id) : value(matirx 246×490, label∈{0,1})
 for file in select_path_list(CONNECTION_MATRIX, '.npy'):
     # 1-抑郁症 0-健康人群
     name = file.split(os.sep)[2].split('_')[0]
     label = int(file[-len('.npy')-1])
     # 246×246 matrix for each participants
-    connected_matrix = np.load(file) # 246×246 取值(-1,1]
+    connected_matrix = np.load(file)  # 246×246 取值(-1,1]
 
-    embedding_from_edges = {} # key(subregion id) : value(embedding 245 from its edges)
+    embedding_from_edges = {}  # key(subregion id) : value(embedding 245 from its edges)
     for i in range(len(connected_matrix)):
         this_subregion_embedding_from_edges = [] 
         for j in range(len(connected_matrix[i])):
@@ -108,25 +118,27 @@ for file in select_path_list(CONNECTION_MATRIX, '.npy'):
         for lobe in lobe_index:
             startIdx, endIdx = lobe_index[lobe][0], lobe_index[lobe][1]
             aggregation_result = aggregation_embeddings(embeddings, startIdx, endIdx)
-            results.append(aggregation_result) # 7×245
+            results.append(aggregation_result)  # 7×245
     # 按照24个gyrus(脑回)进行节点聚合
     elif aggregation_type == aggregation_gyrus:
         for gyrus in gyrus_index:
             startIdx, endIdx = gyrus_index[gyrus][0], gyrus_index[gyrus][1]
             aggregation_result = aggregation_embeddings(embeddings, startIdx, endIdx)
-            results.append(aggregation_result) # 24×245
+            results.append(aggregation_result)  # 24×245
     # 不进行节点聚合
     elif aggregation_type == aggregation_not:
         results = embeddings # 246*245
     else:
         print(f'Please check you aggregation type = {aggregation_type}')
         exit(1)
-    all_data_pair[name] = (results, label) # sub-01到sub-51 label=1; sub-52~sub72 label=0
+    all_data_pair[name] = (results, label)  # sub-01到sub-51 label=1; sub-52~sub72 label=0
 
 
-""" 数据增强 """
-# 从一个m×n的二维矩阵中随机挑选一半的位置
+# 数据增强 
 def randomly_choose_half_point(m : int, n : int)->list:
+    """
+    从一个m * n的二维矩阵中随机挑选一半的位置
+    """
     position = []
     for x in range(m):
         for y in range(n):
@@ -145,7 +157,7 @@ for name in original_keys:
             position = randomly_choose_half_point(len(results), len(results[0]))
             new_results = copy.deepcopy(results)
             for pos in position:
-                add_or_reduce = random.randint(0,1) # 该位置处的值 加上或者减去 噪声值
+                add_or_reduce = random.randint(0,1)  # 该位置处的值 加上或者减去 噪声值
                 new_results[pos[0]][pos[1]] += noise if add_or_reduce == 0 else -noise
             all_data_pair[new_name] = (new_results, label)
     # 正常人群
@@ -156,12 +168,12 @@ for name in original_keys:
             position = randomly_choose_half_point(len(results), len(results[0]))
             new_results = copy.deepcopy(results)
             for pos in position:
-                add_or_reduce = random.randint(0,1) # 该位置处的值 加上或者减去 噪声值
+                add_or_reduce = random.randint(0,1)  # 该位置处的值 加上或者减去 噪声值
                 new_results[pos[0]][pos[1]] += noise if add_or_reduce == 0 else -noise
             all_data_pair[new_name] = (new_results, label)
 
 
-""" 超参数 """
+# 超参数 
 with open(YAML_PATH, 'r') as file:
     yaml_data = yaml.load(file, Loader=yaml.FullLoader)
 batch_size = len(all_data_pair) if yaml_data['batch_size'] == None else yaml_data['batch_size']
@@ -170,16 +182,21 @@ epochs = yaml_data['epochs']
 save_weights_pth = yaml_data['save_weights_pth']
 save_result_txt = yaml_data['save_result_txt']
 
-""" 算力设备 """
+# 算力设备 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f'Device = {device}')
 
 
-""" 制作datasets """
 class GetData(Dataset):
+    """
+    依据数据集制作自己的datasets 
+
+    Attributes:
+        participant : 受试者
+        embedding : 每个脑区的embedding
+        targes : 01值. 1-抑郁症 0-心理健康
+    """
     def __init__(self, participant : list, embeddings : list, targets : list) -> None:
-        # embeddings为每个脑区的embedding
-        # targets为01值
         self.participant = participant
         self.embeddings = FloatTensor(embeddings)
         self.targets = FloatTensor(targets)
@@ -189,9 +206,16 @@ class GetData(Dataset):
         assert len(self.participant) == len(self.embeddings) == len(self.targets)
         return len(self.embeddings)
 
-""" 划分训练集 验证集 测试集 """
-def get_train_value_dataloader():
-    def make_dataloader(participants : list, x : np.array, y : list) -> DataLoader:
+def get_train_value_dataloader() -> None:
+    """ 
+    划分训练集 验证集 测试集 
+    """
+
+    def make_dataloader(
+            participants : list,
+            x : np.array, 
+            y : list
+    ) -> DataLoader:
         dataset = GetData(participants, x, y)
         return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
     
@@ -245,8 +269,11 @@ def get_train_value_dataloader():
     return sector_name, train_loader, test_loader
 
 
-""" MLP """
 class MLP(Module):
+    """
+    多层感知机
+    
+    """
     def __init__(self, in_features: int) -> None:
         super().__init__()
         # 激活函数
@@ -270,8 +297,15 @@ class MLP(Module):
         x = x.squeeze(-1)
         return features_x, self.predict(x)
 
-# 两种方式的API计算AUC值
-def calculate_AUC(pred_list : list, true_list : list):
+def calculate_AUC(pred_list : list, true_list : list) -> None:
+    """
+    两种方式的API计算AUC值
+
+    Args:
+        pred_list : 预测概率
+        true_list : 真实标签
+
+    """
     pred_np = np.array(pred_list)
     true_np = np.array(true_list)
     
@@ -281,30 +315,18 @@ def calculate_AUC(pred_list : list, true_list : list):
     assert roc_auc == roc_auc_score(true_np, pred_np)
     return roc_auc, pred_list
 
-# 给loss添加正则化
-def norm_loss(loss, norm_type='L2'):
-    re_lambda = 0.001
-    if norm_type == 'L1':
-        # 添加L1正则化
-        re_norm = sum(abs(p).sum()  for p in model.parameters())
-    elif norm_type == 'L2':
-        # 添加L2正则化
-        re_norm = sum(p.pow(2.0).sum()  for p in model.parameters())
-    return loss + re_lambda * re_norm
-
-
-if __name__ == '__main__':
+def main():
     # train_loader, validation_loader, test_loader = get_train_value_dataloader()
     sector_name, train_loader, test_loader = get_train_value_dataloader()
 
     start_time = time.time()
-    in_features = next(iter(train_loader))[1].shape[-1] # lobe:1716=7*245, gyrus:5880=24*245
+    in_features = next(iter(train_loader))[1].shape[-1]  # lobe:1716=7*245, gyrus:5880=24*245
 
     model = MLP(in_features)
     trainable_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f'The number of trainable parametes is {trainable_parameters}')
 
-    if torch.cuda.is_available: # 将模型迁移到GPU上
+    if torch.cuda.is_available:  # 将模型迁移到GPU上
         model = model.cuda()
 
     # 损失函数
@@ -323,21 +345,24 @@ if __name__ == '__main__':
         pred_list = []
         true_list = []
         for user, xt, yt in train_loader:
-            if torch.cuda.is_available: # 将数据迁移到GPU上
+            if torch.cuda.is_available:  # 将数据迁移到GPU上
                 xt, yt = xt.cuda(), yt.cuda()
             _, y_pred = model(xt)
             pred_list += y_pred.cpu()
             true_list += yt.cpu()
             l = loss(y_pred, yt)
-            # # 损失函数正则化 
-            l = norm_loss(l)
+            # 损失函数L2正则化 
+            re_lambda = 0.001
+            re_norm = sum(p.pow(2.0).sum()  for p in model.parameters())
+            l = l + re_lambda * re_norm
+
             train_loss_list.append(l.item())
             # 反向传播的三步
-            optimizer.zero_grad() # 清除梯度
-            l.backward() # 反向传播
+            optimizer.zero_grad()  # 清除梯度
+            l.backward()  # 反向传播
             # if hasattr(torch.cuda, 'empty_cache'):
             #     torch.cuda.empty_cache()
-            optimizer.step() # 优化更新
+            optimizer.step()  # 优化更新
    
     # 在测试集上计算AUC, LogLoss
     model.eval()
@@ -345,7 +370,7 @@ if __name__ == '__main__':
     true_list = []
     with torch.no_grad():
         for user, xv, yv in test_loader:
-            if torch.cuda.is_available: # 将模型和数据迁移到GPU上
+            if torch.cuda.is_available:  # 将模型和数据迁移到GPU上
                 xv, yv = xv.cuda(), yv.cuda()
             features_x, y_pred = model(xv)
             pred_list += y_pred.cpu()
@@ -370,3 +395,6 @@ if __name__ == '__main__':
             for x, y in zip(pred_list, true_list):
                 file.write(f'{str(x)}\t{str(y)}\n')
             file.write('\n\n')
+
+if __name__ == '__main__':
+    main()

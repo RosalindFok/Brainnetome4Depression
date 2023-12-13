@@ -1,5 +1,7 @@
 # -*- coding: UTF-8 -*-
-""" 功能连接网络 """
+""" 
+generate functional connectivity(FC) matrix via Brainnetome Atlas
+"""
 import os, csv, time, json
 import nibabel as nib
 import numpy as np
@@ -8,8 +10,18 @@ from nibabel.viewers import OrthoSlicer3D
 from nilearn import plotting, maskers, connectome, image, datasets
 from load_path import *
 
-""" 绘制相关矩阵 """
-def draw_correlation_matrix(correlation_matrix : np.array, labels=None)->None:
+
+def draw_correlation_matrix(
+        correlation_matrix : np.array, 
+        labels=None
+) -> None:
+    """
+    绘制相关矩阵
+
+    Args:
+        correlation_matrix : 相关矩阵
+        labels : 每行/列的标签
+    """
     plt.figure(figsize=(10, 10))
     plt.imshow(correlation_matrix, interpolation="nearest", cmap="RdBu_r", vmax=0.8, vmin=-0.8)
 
@@ -21,15 +33,26 @@ def draw_correlation_matrix(correlation_matrix : np.array, labels=None)->None:
     plt.subplots_adjust(left=.01, bottom=.3, top=.99, right=.62)
     plt.show()
 
-""" 保存相关矩阵 """
-def save_connection_matrix(correlation_matrix : np.array, save_path : str):
+def save_connection_matrix(
+        correlation_matrix : np.array, 
+        save_path : str
+) -> None:
+    """
+    保存相关矩阵图像
+
+    Args:
+        correlation_matrix : 相关矩阵
+        save_path : 保存路径
+    """
     plt.figure(figsize=(10, 10))
     plt.imshow(correlation_matrix, interpolation="nearest", cmap="RdBu_r", vmax=0.8, vmin=-0.8)
     plt.savefig(save_path)
     plt.close()
 
-""" 对脑图谱的可视化 """
 def draw_atlas(atlas : nib.nifti1.Nifti1Image):
+    """
+    对脑图谱的可视化: 三剖面 玻璃脑 结构连接矩阵
+    """
     # 展示三个剖面
     OrthoSlicer3D(atlas.dataobj).show()
     # 绘制玻璃脑图像
@@ -48,7 +71,7 @@ def draw_atlas(atlas : nib.nifti1.Nifti1Image):
         # 显示图谱
         plotting.show()
 
-""" Atlas """
+# Atlas 
 # Brainnetome Atlas - Brainnetome Center and National Laboratory of Pattern Recognition(NLPR)
 atlas = nib.load(path_join(BNA_PATH, 'BN_Atlas_246_1mm.nii.gz')) # dim[1~3] = [182 218 182]
 # Harvard-Oxford
@@ -60,8 +83,8 @@ atlas = nib.load(path_join(BNA_PATH, 'BN_Atlas_246_1mm.nii.gz')) # dim[1~3] = [1
 # 定义一个标签掩码器
 masker = maskers.NiftiLabelsMasker(labels_img=atlas, standardize='zscore_sample')
 
-""" 读取PARICIPANTS_INFO的内容 """
-participants_side_info = {} # key(sub-id) : value(information_dictionary);
+# 读取PARICIPANTS_INFO的内容 
+participants_side_info = {}  # key(sub-id) : value(information_dictionary);
 with open(PARICIPANTS_INFO, 'r') as file:
     reader = csv.reader(file, delimiter='\t')
     side_info = [row for row in reader]
@@ -71,7 +94,7 @@ with open(PARICIPANTS_INFO, 'r') as file:
     side_info = side_info[1:]
     for each_participants_side_info in side_info:
         assert len(head) == len(each_participants_side_info[1:])
-        information_dictionary = {field:value for field, value in zip(head, each_participants_side_info[1:])} # key(field in head) : value(the specific value)
+        information_dictionary = {field:value for field, value in zip(head, each_participants_side_info[1:])}  # key(field in head) : value(the specific value)
         participants_side_info[each_participants_side_info[0]] = information_dictionary
 with open(PARICIPANTS_INFO_JSON, 'w') as file:
     json.dump(participants_side_info, file, indent=4)
@@ -90,6 +113,7 @@ nibabel.load返回一个Nifti1Image类型变量
     ALFF(Amplitude of Low Frequency Fluctuation):揭示了区域自发活动的 BOLD 信号强度.
 """
 
+# 计算连接矩阵
 for sub_func_path,sub_anat_path in zip(SUBJECTS_FUNC_PATH, SUBJECTS_ANAT_PATH):
     start_time = time.time()
 
@@ -97,7 +121,7 @@ for sub_func_path,sub_anat_path in zip(SUBJECTS_FUNC_PATH, SUBJECTS_ANAT_PATH):
     full_name = files[0].split(os.sep)[-1].split('.')[0]
     sub_name = full_name.split('_')[0]
     state = participants_side_info[sub_name]['group']
-    state = '0' if state == 'control' else '1' if state == 'depr' else exit(1) # 0-健康人群 1代表患者
+    state = '0' if state == 'control' else '1' if state == 'depr' else exit(1)  # 0-健康人群 1代表患者
     save_matrix_path = path_join(CONNECTION_MATRIX, full_name+'_'+state+'.npy')
     save_pic_path = path_join(CONNECTION_MATRIX, full_name+'_'+state+'.svg') 
     save_ntw_path = path_join(CONNECTION_MATRIX, full_name+'_network_'+state+'.svg') 
@@ -114,7 +138,7 @@ for sub_func_path,sub_anat_path in zip(SUBJECTS_FUNC_PATH, SUBJECTS_ANAT_PATH):
         plotting.plot_connectome(correlation_matrix, coordinates, node_size=10, colorbar=True, output_file=save_ntw_path)
     # 连接矩阵信息不存在
     elif not os.path.exists(save_matrix_path):
-        img = nib.load(files[0]) # 本数据集每个img的时间序列为100
+        img = nib.load(files[0])  # 本数据集每个img的时间序列为100
         # 删除前5个和后5个时间维度的图像
         img = nib.Nifti1Image(img.get_fdata()[...,5:-5], img.affine, img.header)
         # 对原始图像进行上采样与Altas对齐

@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
-""" UMAP降维分析 """
-import umap, os, time
+""" UMAP and PCA analysis """
+import umap, time
 import numpy as np
 import matplotlib.pyplot as plt
 from load_path  import *
