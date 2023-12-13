@@ -53,15 +53,15 @@ To save public store, all txt files were zipped as `ori_data.zip`.<br>
 
 ## 5. Methods
 ### 5.1. Brainnetome Atlas
-![viewer](.\figs\Atlas_1.svg)
-![correlation matrix](.\figs\Atlas_2.svg)
+![viewer](./figs/Atlas_1.svg)
+![correlation matrix](./figs/Atlas_2.svg)
 ## 5.2. preprocessing_pipeline
-![pipeline of preprocessing](.\figs\preprocessing_pipeline.svg)
+![pipeline of preprocessing](./figs/preprocessing_pipeline.svg)
 
 ## 6. Results
 ### 6.1. Aggregation via lobe or gyrus
-![lobe](.\figs\lobe_auc_logloss.svg)
-![gyrus](.\figs\gyrus_auc_logloss.svg)
+![lobe](./figs/lobe_auc_logloss.svg)
+![gyrus](./figs/gyrus_auc_logloss.svg)
 ### 6.2. Different epochs or learning rate
-![learning rate](.\figs\diff_learningrate.svg)
-![epochs](.\figs\diff_epochs.svg)
+![learning rate](./figs/diff_learningrate.svg)
+![epochs](./figs/diff_epochs.svg)
