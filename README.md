@@ -1,5 +1,7 @@
 # Brainnetome4Depression
 ## 1. Environment and Data
+[![Brainnetome Atlas](https://img.shields.io/badge/Atlas-Brainnetome-blue.svg)](https://atlas.brainnetome.org/)
+[![PyTorch](https://img.shields.io/badge/Py-Torch-brightgreen.svg)](https://pytorch.org/)
 #### Environment
 ``` shell
 conda create --name bn4depression python=3.9.1
