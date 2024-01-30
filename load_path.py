@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 import os
  
-# 简单文件操作 
+# 合并路径
 path_join = lambda root, leaf: os.path.join(root, leaf)
 # 将root路径下含有字段string的所有文件的路径生成一个列表
 select_path_list = lambda root, string: [path_join(root, label) for label in os.listdir(root) if string in label]
